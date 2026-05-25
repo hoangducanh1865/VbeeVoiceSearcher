@@ -1,0 +1,4 @@
+item_name,dur,pitch,energy,gender,emotion,spk,txt,style_prompt
+yeah,low,normal,low,M,happy,ESD-0020,"Yeah I feel comfortable around people.","A delighted speaker utilizes a lower pitch while speaking at a normal pace, projecting a prevailing low dynamism."
+oh,low,normal,low,M,surprised,MEAD-M026,"Oh my God, it's so crazy.","Utilizing a low tonal quality and customary speaking tempo, speaker's surprised expression hints at lowered enthusiasm."
+long,low,normal,normal,F,sad,ESD-0019,"Not yet, but I’ve heard great things about their coffee. We should check it out sometime.","With speaker's unique bass, speaker sadly articulated."

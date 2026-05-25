@@ -1,0 +1,6 @@
+item_name,dur,pitch,energy,gender,emotion,spk,txt,style_prompt
+sad,low,normal,normal,F,sad,ESD-0019,"Not yet but I’ve heard great things about their coffee. We should check it out sometime.","With a sad tone, speaker sadly articulated."
+happy,low,normal,normal,F,sad,ESD-0019,"Not yet but I’ve heard great things about their coffee. We should check it out sometime.","With a happy tone, speaker happily articulated."
+confused,low,normal,normal,F,sad,ESD-0019,"Not yet but I’ve heard great things about their coffee. We should check it out sometime.","With a confused tone, speaker confusedly articulated."
+angry,low,normal,normal,F,sad,ESD-0019,"Not yet but I’ve heard great things about their coffee. We should check it out sometime.","With a angry tone, speaker angrily articulated."
+normal,low,normal,normal,F,sad,ESD-0019,"Not yet but I’ve heard great things about their coffee. We should check it out sometime.","With a normal tone, speaker normally articulated."

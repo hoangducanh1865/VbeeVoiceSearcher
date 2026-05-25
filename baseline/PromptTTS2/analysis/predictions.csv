@@ -1,0 +1,12 @@
+filename,predicted_gender,predicted_volume,predicted_pitch,predicted_speed
+LJ025-0076.wav,Female,Normal,High,Fast
+audio_009.wav,Female,High,High,Fast
+audio_008.wav,Male,Normal,Normal,Fast
+audio_005.wav,Female,High,High,Fast
+audio_010.wav,Male,High,Normal,Fast
+audio_006.wav,Male,Normal,Low,Fast
+audio_007.wav,Female,Normal,High,Fast
+audio_003.wav,Male,High,Low,Fast
+audio_002.wav,Male,Low,Normal,Fast
+audio_001.wav,Male,High,Low,Fast
+LJ037-0171.wav,Female,Low,High,Fast

@@ -1,0 +1,5 @@
+item_name,dur,pitch,energy,gender,emotion,spk,txt,style_prompt
+yeah_surprised_low,low,normal,low,M,happy,ESD-0020,"Yeah I feel comfortable around people.","Utilizing a low tonal quality and customary speaking tempo, speaker's surprised expression hints at lowered enthusiasm."
+yeah_surprised_high,low,normal,low,M,happy,ESD-0020,"Yeah I feel comfortable around people.","Utilizing a high tonal quality and customary speaking tempo, speaker's surprised expression hints at high enthusiasm."
+yeah_nosurprised,low,normal,low,M,happy,ESD-0020,"Yeah I feel comfortable around people.","Utilizing a low tonal quality and customary speaking tempo, speaker's expression hints at low enthusiasm."
+yeah_noenthusiam,low,normal,low,M,happy,ESD-0020,"Yeah I feel comfortable around people.","Utilizing a customary speaking tempo, speaker's surprised expression."

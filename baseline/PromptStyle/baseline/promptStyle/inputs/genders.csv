@@ -1,0 +1,5 @@
+item_name,dur,pitch,energy,gender,emotion,spk,txt,style_prompt
+female_she,low,normal,low,M,surprised,MEAD-M026,"Oh my God, it's so crazy.","Utilizing a low tonal quality and customary speaking tempo, she surprised expression hints at lowered enthusiasm."
+female_woman,low,normal,low,M,surprised,MEAD-M026,"Oh my God, it's so crazy.","Utilizing a low tonal quality and customary speaking tempo, the woman surprised expression hints at lowered enthusiasm."
+female_he,low,normal,low,M,surprised,MEAD-M026,"Oh my God, it's so crazy.","Utilizing a low tonal quality and customary speaking tempo, he surprised expression hints at lowered enthusiasm."
+female_man,low,normal,low,M,surprised,MEAD-M026,"Oh my God, it's so crazy.","Utilizing a low tonal quality and customary speaking tempo, the man surprised expression hints at lowered enthusiasm."
