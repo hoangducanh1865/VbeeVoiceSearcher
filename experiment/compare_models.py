@@ -361,7 +361,7 @@ def run_ml_comparison(axes: List[dict], test_path: Path, out_dir: Path) -> None:
             print(f"[INFO] Evaluated ML model: {name}", file=sys.stderr)
         except SystemExit:
             print(f"[WARN] {name} not trained yet — skipping. "
-                  f"Run: python main.py --mode ml --action train --ml-model {name}", file=sys.stderr)
+                  f"Run: python main.py --mode ml --action train --model-ml {name}", file=sys.stderr)
 
     if not metrics_all:
         print("[ERROR] No trained ML models found.", file=sys.stderr)

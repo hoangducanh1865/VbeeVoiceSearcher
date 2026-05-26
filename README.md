@@ -25,7 +25,7 @@ data/
   user_input/     ← user_input.jsonl (text + labels, dùng để infer tự do)
   user_input_predict/  ← LLM predictions (per model subfolder)
   dataset/        ← train.jsonl / test.jsonl (generated)
-  ml_model/       ← trained ML artifacts
+  model_ml/       ← trained ML artifacts
 experiment/
   compare_models.py    ← so sánh LLM / ML models
 ```
@@ -37,15 +37,15 @@ experiment/
 python -m src.dataset.generator
 
 # 2. Train
-python main.py --mode ml --action train --ml-model svm
-python main.py --mode ml --action train --ml-model logistic_regression
-python main.py --mode ml --action train --ml-model naive_bayes
+python main.py --mode ml --action train --model-ml svm
+python main.py --mode ml --action train --model-ml logistic_regression
+python main.py --mode ml --action train --model-ml naive_bayes
 
 # 3. Evaluate trên test set
-python main.py --mode ml --action evaluate --ml-model svm
+python main.py --mode ml --action evaluate --model-ml svm
 
 # 4. Infer 1 story từ data/user_input/user_input.jsonl
-python main.py --mode ml --action infer --ml-model svm --story story_03
+python main.py --mode ml --action infer --model-ml svm --story story_03
 ```
 
 ## LLM mode
@@ -70,7 +70,7 @@ Thêm `HF_TOKEN` và `GEMINI_API` vào **Secrets** (🔑), sau đó:
 ```python
 !pip install -r requirements.txt
 !python -m src.dataset.generator
-!python main.py --mode ml --action train --ml-model svm
+!python main.py --mode ml --action train --model-ml svm
 !python experiment/compare_models.py --mode ml
 ```
 

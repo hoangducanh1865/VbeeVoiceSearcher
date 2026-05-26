@@ -88,7 +88,7 @@ def run_ml(args, axes) -> None:
     from src.model_llm.config import TEST_JSONL
 
     action   = args.action
-    ml_name  = args.ml_model
+    ml_name  = args.model_ml
 
     if action is None:
         print("[ERROR] --action required for --mode ml  (train / evaluate / infer)", file=sys.stderr)
@@ -153,7 +153,7 @@ def main() -> None:
         help="ML action: train | evaluate | infer",
     )
     parser.add_argument(
-        "--ml-model", choices=["svm", "logistic_regression", "naive_bayes"], default="svm",
+        "--model-ml", choices=["svm", "logistic_regression", "naive_bayes"], default="svm",
         help="ML classifier to use (default: svm)",
     )
     parser.add_argument(

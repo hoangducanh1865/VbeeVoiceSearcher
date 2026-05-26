@@ -13,7 +13,7 @@ from src.model_llm.evaluator import compute_metrics
 if TYPE_CHECKING:
     pass
 
-ML_MODEL_DIR = Path("data/ml_model")
+ML_MODEL_DIR = Path("data/model_ml")
 
 
 # ── Classifier registry ──────────────────────────────────────────────────────
