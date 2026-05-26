@@ -61,7 +61,10 @@ MODELS = [
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 METADATA_PATH = Path("data/meta_data/meta_data.jsonl")
-OUTPUT_FILE = Path("data/input_label.jsonl")
+OUTPUT_FILE   = Path("data/input_label.jsonl")   # legacy single-run output
+INPUT_JSONL   = Path("data/user_input/user_input.jsonl")
+LABEL_JSONL   = Path("data/user_input_label/user_input_label.jsonl")
+PREDICT_DIR   = Path("data/user_input_predict")
 
 # ── NLI hypothesis template (Vietnamese) ─────────────────────────────────────
 HYPOTHESIS_TEMPLATE = "Đoạn văn này thể hiện {}."

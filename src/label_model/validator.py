@@ -1,7 +1,7 @@
 import sys
 from typing import List
 
-from src.classifier import PredResult
+from src.label_model.classifier import PredResult
 
 
 def validate(results: List[PredResult]) -> List[PredResult]:

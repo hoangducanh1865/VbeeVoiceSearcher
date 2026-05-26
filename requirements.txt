@@ -4,3 +4,4 @@ numpy
 pandas
 tabulate
 matplotlib
+scikit-learn

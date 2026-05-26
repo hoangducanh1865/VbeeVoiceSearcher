@@ -1,12 +1,15 @@
 """
-Compare multiple zero-shot models on the same Vietnamese input text.
-Outputs a PNG chart to ./experiment/compare_<input_stem>.png
+Compare multiple zero-shot models on 20 Vietnamese stories.
+Computes per-axis metrics (accuracy / precision / recall / F1) against ground truth.
+Outputs PNG chart to experiment/compare_input.png.
 
 Usage:
-    python experiment/compare_models.py ./data/user_input/input1.txt
+    python experiment/compare_models.py
+    python experiment/compare_models.py --sample story_03   # story shown in sections 1-3
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import Dict, List
@@ -16,46 +19,95 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Allow running from project root
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.classifier import PredResult, TextClassifier
-from src.config import DEVICE, METADATA_PATH, MODELS
-from src.metadata_loader import load_axes
-from src.text_loader import load_text
+from src.label_model.classifier import PredResult, TextClassifier
+from src.label_model.config import DEVICE, INPUT_JSONL, LABEL_JSONL, METADATA_PATH, MODELS, PREDICT_DIR
+from src.label_model.evaluator import compute_metrics
+from src.label_model.metadata_loader import load_axes
+from src.label_model.text_loader import load_ground_truth, load_stories
 
 
-# ── Model runner ─────────────────────────────────────────────────────────────
+# ── I/O helpers ───────────────────────────────────────────────────────────────
+
+def _results_to_pred_dict(results: List[PredResult]) -> Dict[str, object]:
+    """Convert List[PredResult] → {axis_en: value_or_list} for one story."""
+    out = {}
+    for r in results:
+        axis_en = r.axis["metadata_en"]
+        if r.axis["loai_nhan"] == "Đa nhãn":
+            out[axis_en] = [lbl for lbl, _ in r.predictions]
+        else:
+            out[axis_en] = r.predictions[0][0] if r.predictions else ""
+    return out
+
+
+def save_predictions(
+    story_id: str,
+    model_short: str,
+    results: List[PredResult],
+    predict_dir: Path,
+) -> None:
+    out_dir = predict_dir / model_short
+    out_dir.mkdir(parents=True, exist_ok=True)
+    record = {"id": story_id, "model": model_short}
+    record.update(_results_to_pred_dict(results))
+    out_file = out_dir / "user_input_predict.jsonl"
+    with open(out_file, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+# ── Model runner ──────────────────────────────────────────────────────────────
 
 def run_all_models(
-    text: str, axes: List[dict]
-) -> Dict[str, List[PredResult]]:
-    """Load each model, predict, then clear GPU before loading the next."""
-    all_results: Dict[str, List[PredResult]] = {}
+    stories: List[dict],
+    axes: List[dict],
+) -> Dict[str, Dict[str, List[PredResult]]]:
+    """
+    Returns: {model_short_name: {story_id: List[PredResult]}}
+    Also writes each prediction to PREDICT_DIR/<model_short>/user_input_predict.jsonl.
+    """
+    # Clear existing per-model predict files for a fresh run
+    for cfg in MODELS:
+        predict_file = PREDICT_DIR / cfg["short_name"] / "user_input_predict.jsonl"
+        predict_file.unlink(missing_ok=True)
+
+    all_results: Dict[str, Dict[str, List[PredResult]]] = {}
 
     for cfg in MODELS:
         short = cfg["short_name"]
         clf = TextClassifier(model_name=cfg["id"], device=DEVICE)
-        all_results[short] = clf.predict(text, axes)
+        model_results: Dict[str, List[PredResult]] = {}
+
+        for story in stories:
+            sid = story["id"]
+            results = clf.predict(story["text"], axes)
+            model_results[sid] = results
+            save_predictions(sid, short, results, PREDICT_DIR)
+
         clf.clear()
+        all_results[short] = model_results
 
     return all_results
 
 
-# ── Plotting ──────────────────────────────────────────────────────────────────
+# ── Plotting helpers ──────────────────────────────────────────────────────────
 
 _LABEL_COLORS = plt.cm.Set2.colors  # type: ignore
 
 
-def _bar_chart_single(ax, axis_def: dict, model_results: Dict[str, List[PredResult]], axis_idx: int):
-    """Bar chart for one single-label axis: one bar per model."""
+def _bar_chart_single(
+    ax, axis_def: dict,
+    model_results: Dict[str, Dict[str, List[PredResult]]],
+    sample_id: str, axis_idx: int,
+):
     model_names = list(model_results.keys())
     allowed = axis_def["cac_gia_tri"]
     label_to_color = {lbl: _LABEL_COLORS[i % len(_LABEL_COLORS)] for i, lbl in enumerate(allowed)}
 
     confidences, colors, pred_labels = [], [], []
     for model in model_names:
-        result = model_results[model][axis_idx]
+        result = model_results[model][sample_id][axis_idx]
         label, conf = result.predictions[0]
         confidences.append(conf)
         colors.append(label_to_color.get(label, "gray"))
@@ -73,44 +125,35 @@ def _bar_chart_single(ax, axis_def: dict, model_results: Dict[str, List[PredResu
     ax.axhline(0.5, color="gray", linestyle="--", linewidth=0.7, alpha=0.6)
     ax.tick_params(axis="y", labelsize=7)
 
-    for bar, label, conf in zip(bars, pred_labels, confidences):
-        # Truncate long labels to fit
+    for bar, label in zip(bars, pred_labels):
         short_label = label if len(label) <= 12 else label[:11] + "…"
         ax.text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() + 0.03,
-            short_label,
-            ha="center", va="bottom", fontsize=6.5, rotation=0,
+            short_label, ha="center", va="bottom", fontsize=6.5,
         )
-
-    # Legend mapping color → label
-    patches = [
-        plt.Rectangle((0, 0), 1, 1, color=label_to_color[lbl])  # type: ignore
-        for lbl in allowed
-    ]
+    patches = [plt.Rectangle((0, 0), 1, 1, color=label_to_color[lbl]) for lbl in allowed]  # type: ignore
     ax.legend(patches, allowed, fontsize=6, loc="upper right", framealpha=0.7)
 
 
-def _grouped_bar_multi(ax, axis_def: dict, model_results: Dict[str, List[PredResult]], axis_idx: int):
-    """Grouped bar chart for multi-label axis: x=style labels, one bar series per model."""
+def _grouped_bar_multi(
+    ax, axis_def: dict,
+    model_results: Dict[str, Dict[str, List[PredResult]]],
+    sample_id: str, axis_idx: int,
+):
     model_names = list(model_results.keys())
     all_labels = axis_def["cac_gia_tri"]
     n_models = len(model_names)
-    n_labels = len(all_labels)
-
     colors = plt.cm.tab10(np.linspace(0, 0.9, n_models))  # type: ignore
     bar_w = 0.8 / n_models
-    x = np.arange(n_labels)
+    x = np.arange(len(all_labels))
 
     for m_idx, (model_name, color) in enumerate(zip(model_names, colors)):
-        result = model_results[model_name][axis_idx]
+        result = model_results[model_name][sample_id][axis_idx]
         scores = [result.all_scores.get(lbl, 0.0) for lbl in all_labels]
         offset = (m_idx - n_models / 2 + 0.5) * bar_w
-        ax.bar(
-            x + offset, scores,
-            width=bar_w * 0.92, color=color,
-            label=model_name, edgecolor="white", linewidth=0.4, alpha=0.88,
-        )
+        ax.bar(x + offset, scores, width=bar_w * 0.92, color=color,
+               label=model_name, edgecolor="white", linewidth=0.4, alpha=0.88)
 
     ax.set_xticks(x)
     ax.set_xticklabels(all_labels, fontsize=9, rotation=20, ha="right")
@@ -127,15 +170,13 @@ def _grouped_bar_multi(ax, axis_def: dict, model_results: Dict[str, List[PredRes
 
 
 def _top3_per_model_row(
-    axes_row: list,
-    axis_def: dict,
-    model_results: Dict[str, List[PredResult]],
-    axis_idx: int,
+    axes_row: list, axis_def: dict,
+    model_results: Dict[str, Dict[str, List[PredResult]]],
+    sample_id: str, axis_idx: int,
 ):
-    """One subplot per model showing top-3 style labels by confidence score."""
     model_names = list(model_results.keys())
     for ax, model_name in zip(axes_row, model_names):
-        result = model_results[model_name][axis_idx]
+        result = model_results[model_name][sample_id][axis_idx]
         top3 = sorted(result.all_scores.items(), key=lambda kv: kv[1], reverse=True)[:3]
         labels = [item[0] for item in top3]
         scores = [item[1] for item in top3]
@@ -150,70 +191,119 @@ def _top3_per_model_row(
         ax.axhline(0.50, color="#e74c3c", linestyle="--", linewidth=0.8, alpha=0.6)
         ax.tick_params(axis="y", labelsize=7)
         ax.grid(axis="y", alpha=0.2, linewidth=0.5, zorder=0)
-
         for bar, score in zip(bars, scores):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.025,
+                    f"{score:.2f}", ha="center", va="bottom", fontsize=7.5, fontweight="bold")
+
+
+def _metrics_heatmap(
+    ax,
+    metrics_all_models: Dict[str, Dict[str, Dict]],
+    axes: List[dict],
+):
+    """Heatmap: rows=models, cols=axes+Overall, values=F1. Below: accuracy bar."""
+    model_names = list(metrics_all_models.keys())
+    axis_labels_en = [a["metadata_en"] for a in axes] + ["Overall"]
+    axis_labels_vi = [a["metadata_vi"] for a in axes] + ["Tổng quát"]
+
+    n_models = len(model_names)
+    n_cols = len(axis_labels_en)
+
+    matrix_f1  = np.zeros((n_models, n_cols))
+    matrix_acc = np.zeros((n_models, n_cols))
+
+    for m_i, model in enumerate(model_names):
+        for c_i, aen in enumerate(axis_labels_en):
+            m = metrics_all_models[model].get(aen, {})
+            matrix_f1[m_i, c_i]  = m.get("f1", 0.0)
+            matrix_acc[m_i, c_i] = m.get("accuracy", m.get("f1", 0.0))
+
+    im = ax.imshow(matrix_f1, aspect="auto", vmin=0, vmax=1, cmap="RdYlGn")
+
+    ax.set_xticks(range(n_cols))
+    ax.set_xticklabels(axis_labels_vi, fontsize=9)
+    ax.set_yticks(range(n_models))
+    ax.set_yticklabels(model_names, fontsize=9)
+    ax.set_title("Macro-F1 per model per axis  (20 stories)", fontsize=10, fontweight="bold", pad=8)
+
+    for m_i in range(n_models):
+        for c_i in range(n_cols):
+            f1  = matrix_f1[m_i, c_i]
+            acc = matrix_acc[m_i, c_i]
+            aen = axis_labels_en[c_i]
+            show_acc = aen != "Overall"
+            cell_text = f"F1={f1:.2f}\nAcc={acc:.2f}" if show_acc else f"F1={f1:.2f}"
             ax.text(
-                bar.get_x() + bar.get_width() / 2,
-                bar.get_height() + 0.025,
-                f"{score:.2f}",
-                ha="center", va="bottom", fontsize=7.5, fontweight="bold",
+                c_i, m_i, cell_text,
+                ha="center", va="center", fontsize=7,
+                color="black" if f1 < 0.65 else "white",
+                fontweight="bold",
             )
 
+    plt.colorbar(im, ax=ax, fraction=0.02, pad=0.02, label="F1 score")
+
+    # Vertical separator before Overall column
+    ax.axvline(n_cols - 1.5, color="white", linewidth=2)
+
+
+# ── Main plot ─────────────────────────────────────────────────────────────────
 
 def plot_comparison(
-    all_results: Dict[str, List[PredResult]],
+    all_results: Dict[str, Dict[str, List[PredResult]]],
+    metrics_all_models: Dict[str, Dict[str, Dict]],
     axes: List[dict],
-    source: str,
+    sample_id: str,
+    source_label: str,
     output_path: Path,
 ):
-    single_axes = [ax for ax in axes if ax["loai_nhan"] == "Đơn nhãn"]
-    multi_axes  = [ax for ax in axes if ax["loai_nhan"] == "Đa nhãn"]
-    single_idxs = [axes.index(ax) for ax in single_axes]
-    multi_idxs  = [axes.index(ax) for ax in multi_axes]
+    single_axes = [a for a in axes if a["loai_nhan"] == "Đơn nhãn"]
+    multi_axes  = [a for a in axes if a["loai_nhan"] == "Đa nhãn"]
+    single_idxs = [axes.index(a) for a in single_axes]
+    multi_idxs  = [axes.index(a) for a in multi_axes]
 
-    n_single = len(single_axes)
-    n_models = len(all_results)
-    n_style_labels = len(multi_axes[0]["cac_gia_tri"]) if multi_axes else 0
+    n_single  = len(single_axes)
+    n_models  = len(all_results)
+    n_style   = len(multi_axes[0]["cac_gia_tri"]) if multi_axes else 0
 
-    fig_w = max(5 * n_single, 2.2 * n_style_labels + n_models)
-    fig_h = 17
-    fig = plt.figure(figsize=(fig_w, fig_h))
+    fig_w = max(5 * n_single, 2.2 * n_style + n_models)
+    fig   = plt.figure(figsize=(fig_w, 22))
 
-    # 3-section vertical layout
-    outer = fig.add_gridspec(3, 1, height_ratios=[1.0, 1.2, 0.85], hspace=0.65)
+    outer = fig.add_gridspec(4, 1, height_ratios=[1.0, 1.2, 0.85, 1.1], hspace=0.7)
 
     # ── Section 1: single-label bar charts ───────────────────────────────────
     gs_top = outer[0].subgridspec(1, n_single, wspace=0.35)
-    for col, (axis_def, axis_idx) in enumerate(zip(single_axes, single_idxs)):
+    for col, (adef, aidx) in enumerate(zip(single_axes, single_idxs)):
         ax = fig.add_subplot(gs_top[0, col])
-        _bar_chart_single(ax, axis_def, all_results, axis_idx)
+        _bar_chart_single(ax, adef, all_results, sample_id, aidx)
 
-    # ── Section 2: multi-label grouped bar chart ─────────────────────────────
+    # ── Section 2: Style grouped bar chart ───────────────────────────────────
     if multi_axes:
         ax_mid = fig.add_subplot(outer[1])
-        _grouped_bar_multi(ax_mid, multi_axes[0], all_results, multi_idxs[0])
+        _grouped_bar_multi(ax_mid, multi_axes[0], all_results, sample_id, multi_idxs[0])
 
-    # ── Section 3: top-3 style labels per model ───────────────────────────────
+    # ── Section 3: top-3 Style labels per model ──────────────────────────────
     if multi_axes:
         gs_bot = outer[2].subgridspec(1, n_models, wspace=0.45)
         axes_bot = [fig.add_subplot(gs_bot[0, j]) for j in range(n_models)]
-        # Share y-axis so bars are comparable across models
         for ax in axes_bot[1:]:
             ax.sharey(axes_bot[0])
             ax.tick_params(labelleft=False)
         axes_bot[0].set_ylabel("Confidence", fontsize=8)
-        _top3_per_model_row(axes_bot, multi_axes[0], all_results, multi_idxs[0])
+        _top3_per_model_row(axes_bot, multi_axes[0], all_results, sample_id, multi_idxs[0])
         fig.text(
-            0.5, outer[2].get_position(fig).y1 + 0.005,
-            f"Top-3 {multi_axes[0]['metadata_vi']} labels per model",
+            0.5, outer[2].get_position(fig).y1 + 0.004,
+            f"Top-3 {multi_axes[0]['metadata_vi']} labels per model  [{sample_id}]",
             ha="center", fontsize=9, fontweight="bold", color="#333333",
         )
 
-    model_list = " | ".join(
-        f"{cfg['short_name']} ({cfg['note']})" for cfg in MODELS
-    )
+    # ── Section 4: metrics heatmap (all 20 stories) ──────────────────────────
+    ax_metrics = fig.add_subplot(outer[3])
+    _metrics_heatmap(ax_metrics, metrics_all_models, axes)
+
+    model_list = " | ".join(f"{cfg['short_name']} ({cfg['note']})" for cfg in MODELS)
     fig.suptitle(
-        f"Model Comparison — Vietnamese TTS Annotation\nInput: {source}",
+        f"Model Comparison — Vietnamese TTS Annotation\n"
+        f"Sections 1–3: {source_label}  |  Section 4: 20 stories",
         fontsize=11, fontweight="bold", y=1.01,
     )
     fig.text(0.5, -0.005, model_list, ha="center", fontsize=6.5, color="gray")
@@ -226,24 +316,49 @@ def plot_comparison(
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Compare zero-shot models on Vietnamese text")
-    parser.add_argument("input_file", help="Path to Vietnamese text file (.txt)")
+    parser = argparse.ArgumentParser(description="Batch compare models with ground-truth evaluation")
+    parser.add_argument("--sample", default="story_01",
+                        help="Story ID to display in sections 1-3 (default: story_01)")
     args = parser.parse_args()
 
-    axes = load_axes(METADATA_PATH)
-    text = load_text(args.input_file)
-    if not text:
-        print("[ERROR] Empty text.", file=sys.stderr)
-        sys.exit(1)
+    axes    = load_axes(METADATA_PATH)
+    stories = load_stories(INPUT_JSONL)
+    gt      = load_ground_truth(LABEL_JSONL)
 
-    all_results = run_all_models(text, axes)
+    print(f"[INFO] Loaded {len(stories)} stories, {len(gt)} ground-truth labels.", file=sys.stderr)
+
+    sample_id = args.sample
+    if sample_id not in {s["id"] for s in stories}:
+        print(f"[WARNING] --sample '{sample_id}' not found; using story_01.", file=sys.stderr)
+        sample_id = stories[0]["id"]
+
+    all_results = run_all_models(stories, axes)
+
+    # Build per-model prediction dicts for evaluator
+    metrics_all_models: Dict[str, Dict] = {}
+    for model_short, story_results in all_results.items():
+        model_preds = {
+            sid: _results_to_pred_dict(results)
+            for sid, results in story_results.items()
+        }
+        metrics_all_models[model_short] = compute_metrics(model_preds, gt, axes)
+
+    # Print summary table to stdout
+    print("\n=== Metrics Summary (F1) ===")
+    axis_labels = [a["metadata_en"] for a in axes] + ["Overall"]
+    header = f"{'Model':<15}" + "".join(f"{a:<14}" for a in axis_labels)
+    print(header)
+    print("-" * len(header))
+    for model, m in metrics_all_models.items():
+        row = f"{model:<15}"
+        for aen in axis_labels:
+            row += f"{m.get(aen, {}).get('f1', 0.0):<14.3f}"
+        print(row)
 
     out_dir = Path("experiment")
     out_dir.mkdir(exist_ok=True)
-    stem = Path(args.input_file).stem
-    output_path = out_dir / f"compare_{stem}.png"
-
-    plot_comparison(all_results, axes, Path(args.input_file).name, output_path)
+    output_path = out_dir / "compare_input.png"
+    plot_comparison(all_results, metrics_all_models, axes, sample_id, sample_id, output_path)
 
 
 if __name__ == "__main__":

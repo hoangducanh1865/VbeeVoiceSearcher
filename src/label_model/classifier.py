@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 
 # Import config first so huggingface_hub.login() runs before transformers is loaded
-from src.config import (
+from src.label_model.config import (
     DEVICE,
     HYPOTHESIS_TEMPLATE,
     MODEL_NAME,
