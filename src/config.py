@@ -8,6 +8,7 @@ from pathlib import Path
 MODEL_NAME = "joeddav/xlm-roberta-large-xnli"
 
 METADATA_PATH = Path("data/meta_data.jsonl")
+OUTPUT_FILE = Path("data/input_label.jsonl")
 
 # NLI hypothesis template in Vietnamese — "{}" is replaced by each candidate label
 HYPOTHESIS_TEMPLATE = "Đoạn văn này thể hiện {}."
