@@ -1,0 +1,5 @@
+{"metadata_en": "Intonation", "metadata_vi": "Ngữ điệu", "loai_nhan": "Đơn nhãn", "cac_gia_tri": ["Trầm", "Trung trầm", "Trung", "Trung cao", "Cao"]}
+{"metadata_en": "Valence", "metadata_vi": "Mức độ tích cực / tiêu cực", "loai_nhan": "Đơn nhãn", "cac_gia_tri": ["Tích cực (vui, hài lòng)", "Trung tính", "Tiêu cực (buồn, giận)"]}
+{"metadata_en": "Energy", "metadata_vi": "Độ mạnh năng lượng (Arousal)", "loai_nhan": "Đơn nhãn", "cac_gia_tri": ["Nhẹ nhàng (low)", "Trung bình (middle)", "Mạnh mẽ (high)"]}
+{"metadata_en": "Temporal", "metadata_vi": "Tốc độ", "loai_nhan": "Đơn nhãn", "cac_gia_tri": ["Chậm rãi", "Bình thường", "Nhanh"]}
+{"metadata_en": "Style", "metadata_vi": "Chất giọng", "loai_nhan": "Đa nhãn", "cac_gia_tri": ["Sâu lắng", "Ngọt ngào", "Truyền cảm hứng", "Sôi nổi", "Tự tin", "Ôn hoà", "Buồn bã", "Vui tươi", "Dồn dập", "Gấp gáp"]}
