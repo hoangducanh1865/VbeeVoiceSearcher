@@ -22,13 +22,31 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.label_model.classifier import PredResult, TextClassifier
-from src.label_model.config import DEVICE, INPUT_JSONL, LABEL_JSONL, METADATA_PATH, MODELS, PREDICT_DIR
+from src.label_model.config import DEVICE, METADATA_PATH, MODELS, PREDICT_DIR, TEST_JSONL
 from src.label_model.evaluator import compute_metrics
 from src.label_model.metadata_loader import load_axes
-from src.label_model.text_loader import load_ground_truth, load_stories
 
 
 # ── I/O helpers ───────────────────────────────────────────────────────────────
+
+def load_test_set(path: Path) -> tuple:
+    """
+    Load dataset JSONL (text + labels in same file).
+    Returns (stories, gt) where:
+        stories = [{"id": ..., "text": ...}]
+        gt      = {story_id: {axis_en: value}}
+    """
+    stories, gt = [], {}
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            obj = json.loads(line)
+            stories.append({"id": obj["id"], "text": obj["text"]})
+            gt[obj["id"]] = {k: v for k, v in obj.items() if k not in ("id", "text")}
+    return stories, gt
+
 
 def _results_to_pred_dict(results: List[PredResult]) -> Dict[str, object]:
     """Convert List[PredResult] → {axis_en: value_or_list} for one story."""
@@ -317,19 +335,25 @@ def plot_comparison(
 
 def main():
     parser = argparse.ArgumentParser(description="Batch compare models with ground-truth evaluation")
-    parser.add_argument("--sample", default="story_01",
-                        help="Story ID to display in sections 1-3 (default: story_01)")
+    parser.add_argument("--sample", default=None,
+                        help="Story ID to display in sections 1-3 (default: first in test set)")
+    parser.add_argument("--test", default=str(TEST_JSONL),
+                        help=f"Path to labeled test JSONL (default: {TEST_JSONL})")
     args = parser.parse_args()
 
-    axes    = load_axes(METADATA_PATH)
-    stories = load_stories(INPUT_JSONL)
-    gt      = load_ground_truth(LABEL_JSONL)
+    axes = load_axes(METADATA_PATH)
 
-    print(f"[INFO] Loaded {len(stories)} stories, {len(gt)} ground-truth labels.", file=sys.stderr)
+    test_path = Path(args.test)
+    if not test_path.exists():
+        print(f"[ERROR] Test set not found: {test_path}. Run: python -m src.dataset.generator", file=sys.stderr)
+        sys.exit(1)
 
-    sample_id = args.sample
+    stories, gt = load_test_set(test_path)
+    print(f"[INFO] Loaded {len(stories)} test stories with ground-truth labels.", file=sys.stderr)
+
+    sample_id = args.sample or stories[0]["id"]
     if sample_id not in {s["id"] for s in stories}:
-        print(f"[WARNING] --sample '{sample_id}' not found; using story_01.", file=sys.stderr)
+        print(f"[WARNING] --sample '{sample_id}' not found; using first story.", file=sys.stderr)
         sample_id = stories[0]["id"]
 
     all_results = run_all_models(stories, axes)
