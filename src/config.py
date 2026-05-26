@@ -7,7 +7,7 @@ from pathlib import Path
 # enabling true zero-shot across 15+ languages including Vietnamese.
 MODEL_NAME = "joeddav/xlm-roberta-large-xnli"
 
-METADATA_PATH = Path("data/meta_data.jsonl")
+METADATA_PATH = Path("data/meta_data/meta_data.jsonl")
 OUTPUT_FILE = Path("data/input_label.jsonl")
 
 # NLI hypothesis template in Vietnamese — "{}" is replaced by each candidate label
