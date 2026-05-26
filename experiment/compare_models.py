@@ -1,11 +1,11 @@
 """
-Compare multiple zero-shot models on 20 Vietnamese stories.
-Computes per-axis metrics (accuracy / precision / recall / F1) against ground truth.
-Outputs PNG chart to experiment/compare_input.png.
+Compare LLM and/or ML models on the test set.
 
 Usage:
-    python experiment/compare_models.py
-    python experiment/compare_models.py --sample story_03   # story shown in sections 1-3
+    python experiment/compare_models.py                  # run both (default)
+    python experiment/compare_models.py --mode llm       # → compare_input_llm.png
+    python experiment/compare_models.py --mode ml        # → compare_input_ml.png
+    python experiment/compare_models.py --sample gen_005 # LLM chart: specific story
 """
 
 import argparse
@@ -21,10 +21,10 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.label_model.classifier import PredResult, TextClassifier
-from src.label_model.config import DEVICE, METADATA_PATH, MODELS, PREDICT_DIR, TEST_JSONL
-from src.label_model.evaluator import compute_metrics
-from src.label_model.metadata_loader import load_axes
+from src.model_llm.classifier import PredResult, TextClassifier
+from src.model_llm.config import DEVICE, METADATA_PATH, MODELS, PREDICT_DIR, TEST_JSONL
+from src.model_llm.evaluator import compute_metrics
+from src.model_llm.metadata_loader import load_axes
 
 
 # ── I/O helpers ───────────────────────────────────────────────────────────────
@@ -242,7 +242,7 @@ def _metrics_heatmap(
     ax.set_xticklabels(axis_labels_vi, fontsize=9)
     ax.set_yticks(range(n_models))
     ax.set_yticklabels(model_names, fontsize=9)
-    ax.set_title("Macro-F1 per model per axis  (20 stories)", fontsize=10, fontweight="bold", pad=8)
+    ax.set_title("Macro-F1 per model per axis  (test set)", fontsize=10, fontweight="bold", pad=8)
 
     for m_i in range(n_models):
         for c_i in range(n_cols):
@@ -331,58 +331,114 @@ def plot_comparison(
     plt.close()
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+# ── ML comparison ─────────────────────────────────────────────────────────────
 
-def main():
-    parser = argparse.ArgumentParser(description="Batch compare models with ground-truth evaluation")
-    parser.add_argument("--sample", default=None,
-                        help="Story ID to display in sections 1-3 (default: first in test set)")
-    parser.add_argument("--test", default=str(TEST_JSONL),
-                        help=f"Path to labeled test JSONL (default: {TEST_JSONL})")
-    args = parser.parse_args()
+_ML_NAMES = ["svm", "logistic_regression", "naive_bayes"]
 
-    axes = load_axes(METADATA_PATH)
 
-    test_path = Path(args.test)
-    if not test_path.exists():
-        print(f"[ERROR] Test set not found: {test_path}. Run: python -m src.dataset.generator", file=sys.stderr)
-        sys.exit(1)
+def _plot_ml_heatmap(
+    metrics_all: Dict[str, Dict[str, Dict]],
+    axes: List[dict],
+    output_path: Path,
+) -> None:
+    fig, ax = plt.subplots(figsize=(11, max(2.5, 0.9 * len(metrics_all) + 1.5)))
+    _metrics_heatmap(ax, metrics_all, axes)
+    ax.set_title("ML Models — Macro-F1 per axis  (test set)", fontsize=10, fontweight="bold", pad=8)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    print(f"[INFO] ML chart saved → {output_path}", file=sys.stderr)
+    plt.close()
 
-    stories, gt = load_test_set(test_path)
-    print(f"[INFO] Loaded {len(stories)} test stories with ground-truth labels.", file=sys.stderr)
 
-    sample_id = args.sample or stories[0]["id"]
-    if sample_id not in {s["id"] for s in stories}:
-        print(f"[WARNING] --sample '{sample_id}' not found; using first story.", file=sys.stderr)
-        sample_id = stories[0]["id"]
+def run_ml_comparison(axes: List[dict], test_path: Path, out_dir: Path) -> None:
+    from src.model_ml.trainer import load_classifier, evaluate_model
 
-    all_results = run_all_models(stories, axes)
+    metrics_all: Dict[str, Dict] = {}
+    for name in _ML_NAMES:
+        try:
+            clf = load_classifier(name)
+            metrics_all[name] = evaluate_model(clf, test_path, axes)
+            print(f"[INFO] Evaluated ML model: {name}", file=sys.stderr)
+        except SystemExit:
+            print(f"[WARN] {name} not trained yet — skipping. "
+                  f"Run: python main.py --mode ml --action train --ml-model {name}", file=sys.stderr)
 
-    # Build per-model prediction dicts for evaluator
-    metrics_all_models: Dict[str, Dict] = {}
-    for model_short, story_results in all_results.items():
-        model_preds = {
-            sid: _results_to_pred_dict(results)
-            for sid, results in story_results.items()
-        }
-        metrics_all_models[model_short] = compute_metrics(model_preds, gt, axes)
+    if not metrics_all:
+        print("[ERROR] No trained ML models found.", file=sys.stderr)
+        return
 
-    # Print summary table to stdout
-    print("\n=== Metrics Summary (F1) ===")
+    # Print summary
+    print("\n=== ML Metrics Summary (F1) ===")
     axis_labels = [a["metadata_en"] for a in axes] + ["Overall"]
-    header = f"{'Model':<15}" + "".join(f"{a:<14}" for a in axis_labels)
+    header = f"{'Model':<22}" + "".join(f"{a:<14}" for a in axis_labels)
     print(header)
     print("-" * len(header))
-    for model, m in metrics_all_models.items():
-        row = f"{model:<15}"
+    for model, m in metrics_all.items():
+        row = f"{model:<22}"
         for aen in axis_labels:
             row += f"{m.get(aen, {}).get('f1', 0.0):<14.3f}"
         print(row)
 
-    out_dir = Path("experiment")
+    _plot_ml_heatmap(metrics_all, axes, out_dir / "compare_input_ml.png")
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(description="Compare LLM and/or ML models on test set")
+    parser.add_argument("--mode", choices=["llm", "ml", "all"], default="all",
+                        help="Which comparison to run (default: all)")
+    parser.add_argument("--sample", default=None,
+                        help="Story ID to display in LLM chart sections 1-3 (default: first)")
+    parser.add_argument("--test", default=str(TEST_JSONL),
+                        help=f"Path to labeled test JSONL (default: {TEST_JSONL})")
+    args = parser.parse_args()
+
+    axes     = load_axes(METADATA_PATH)
+    out_dir  = Path("experiment")
     out_dir.mkdir(exist_ok=True)
-    output_path = out_dir / "compare_input.png"
-    plot_comparison(all_results, metrics_all_models, axes, sample_id, sample_id, output_path)
+
+    test_path = Path(args.test)
+    if not test_path.exists():
+        print(f"[ERROR] Test set not found: {test_path}. Run: python -m src.dataset.generator",
+              file=sys.stderr)
+        sys.exit(1)
+
+    if args.mode in ("ml", "all"):
+        run_ml_comparison(axes, test_path, out_dir)
+
+    if args.mode in ("llm", "all"):
+        stories, gt = load_test_set(test_path)
+        print(f"[INFO] Loaded {len(stories)} test stories.", file=sys.stderr)
+
+        sample_id = args.sample or stories[0]["id"]
+        if sample_id not in {s["id"] for s in stories}:
+            print(f"[WARNING] --sample '{sample_id}' not found; using first story.", file=sys.stderr)
+            sample_id = stories[0]["id"]
+
+        all_results = run_all_models(stories, axes)
+
+        metrics_all_models: Dict[str, Dict] = {}
+        for model_short, story_results in all_results.items():
+            model_preds = {
+                sid: _results_to_pred_dict(results)
+                for sid, results in story_results.items()
+            }
+            metrics_all_models[model_short] = compute_metrics(model_preds, gt, axes)
+
+        print("\n=== LLM Metrics Summary (F1) ===")
+        axis_labels = [a["metadata_en"] for a in axes] + ["Overall"]
+        header = f"{'Model':<15}" + "".join(f"{a:<14}" for a in axis_labels)
+        print(header)
+        print("-" * len(header))
+        for model, m in metrics_all_models.items():
+            row = f"{model:<15}"
+            for aen in axis_labels:
+                row += f"{m.get(aen, {}).get('f1', 0.0):<14.3f}"
+            print(row)
+
+        plot_comparison(all_results, metrics_all_models, axes, sample_id, sample_id,
+                        out_dir / "compare_input_llm.png")
 
 
 if __name__ == "__main__":

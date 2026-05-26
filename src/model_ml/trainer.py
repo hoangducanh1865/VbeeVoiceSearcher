@@ -7,8 +7,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from src.ml_model.base import BaseMLClassifier
-from src.label_model.evaluator import compute_metrics
+from src.model_ml.base import BaseMLClassifier
+from src.model_llm.evaluator import compute_metrics
 
 if TYPE_CHECKING:
     pass
@@ -20,13 +20,13 @@ ML_MODEL_DIR = Path("data/ml_model")
 
 def get_classifier(name: str) -> BaseMLClassifier:
     if name == "svm":
-        from src.ml_model.svm.model import SVMClassifier
+        from src.model_ml.svm.model import SVMClassifier
         return SVMClassifier()
     if name == "logistic_regression":
-        from src.ml_model.logistic_regression.model import LogisticRegressionClassifier
+        from src.model_ml.logistic_regression.model import LogisticRegressionClassifier
         return LogisticRegressionClassifier()
     if name == "naive_bayes":
-        from src.ml_model.naive_bayes.model import NaiveBayesClassifier
+        from src.model_ml.naive_bayes.model import NaiveBayesClassifier
         return NaiveBayesClassifier()
     print(f"[ERROR] Unknown ML model: '{name}'", file=sys.stderr)
     sys.exit(1)

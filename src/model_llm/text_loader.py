@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from typing import List
 
-from src.label_model.config import MAX_LENGTH
+from src.model_llm.config import MAX_LENGTH
 
 
 def load_stories(path: Path) -> List[dict]:
@@ -30,24 +30,6 @@ def load_stories(path: Path) -> List[dict]:
         print("[ERROR] No valid stories loaded.", file=sys.stderr)
         sys.exit(1)
     return stories
-
-
-def load_ground_truth(path: Path) -> dict:
-    """Load user_input_label.jsonl → {story_id: {axis_en: value}} dict."""
-    path = Path(path)
-    if not path.exists():
-        print(f"[ERROR] Label JSONL not found: {path}", file=sys.stderr)
-        sys.exit(1)
-    gt = {}
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            obj = json.loads(line)
-            story_id = obj.pop("id")
-            gt[story_id] = obj
-    return gt
 
 
 def load_text(path: str | Path) -> str:

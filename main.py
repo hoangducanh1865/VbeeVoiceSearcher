@@ -3,9 +3,9 @@ import json
 import sys
 from typing import List
 
-from src.label_model.config import INPUT_JSONL, METADATA_PATH, MODELS, MODEL_NAME, PREDICT_DIR
-from src.label_model.metadata_loader import load_axes
-from src.label_model.text_loader import load_stories
+from src.model_llm.config import INPUT_JSONL, METADATA_PATH, MODELS, MODEL_NAME, PREDICT_DIR
+from src.model_llm.metadata_loader import load_axes
+from src.model_llm.text_loader import load_stories
 
 
 # ── Shared helpers ───────────────────────────────────────────────────────────
@@ -43,9 +43,9 @@ def _render_ml_result(pred: dict, axes: list[dict]) -> None:
 # ── LLM mode ─────────────────────────────────────────────────────────────────
 
 def run_llm(args, axes) -> None:
-    from src.label_model.classifier import TextClassifier
-    from src.label_model.formatter import render
-    from src.label_model.validator import validate
+    from src.model_llm.classifier import TextClassifier
+    from src.model_llm.formatter import render
+    from src.model_llm.validator import validate
 
     model_id   = args.model or MODEL_NAME
     short_name = _model_short_name(model_id)
@@ -81,11 +81,11 @@ def run_llm(args, axes) -> None:
 # ── ML mode ──────────────────────────────────────────────────────────────────
 
 def run_ml(args, axes) -> None:
-    from src.ml_model.trainer import (
+    from src.model_ml.trainer import (
         get_classifier, load_classifier,
         train_model, evaluate_model, print_metrics, infer_one,
     )
-    from src.label_model.config import TEST_JSONL
+    from src.model_llm.config import TEST_JSONL
 
     action   = args.action
     ml_name  = args.ml_model
@@ -95,7 +95,7 @@ def run_ml(args, axes) -> None:
         sys.exit(1)
 
     if action == "train":
-        from src.label_model.config import ML_MODEL_DIR
+        from src.model_llm.config import ML_MODEL_DIR
         from pathlib import Path
         train_path = Path("data/dataset/train.jsonl")
         clf = get_classifier(ml_name)
@@ -122,6 +122,14 @@ def run_ml(args, axes) -> None:
 
         print(f"\n── {match['id']} (ML: {ml_name}) ──")
         _render_ml_result(pred, axes)
+
+        out_dir  = PREDICT_DIR / ml_name
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_file = out_dir / "user_input_predict.jsonl"
+        record   = {"id": match["id"], "model": ml_name, **pred}
+        with out_file.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        print(f"[INFO] Prediction appended to {out_file}", file=sys.stderr)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

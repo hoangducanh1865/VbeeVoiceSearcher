@@ -3,7 +3,7 @@ from typing import List
 
 from tabulate import tabulate
 
-from src.label_model.classifier import PredResult
+from src.model_llm.classifier import PredResult
 
 
 def render(results: List[PredResult]) -> str:

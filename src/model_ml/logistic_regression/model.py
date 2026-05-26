@@ -5,8 +5,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.preprocessing import MultiLabelBinarizer
 
-from src.ml_model.base import BaseMLClassifier
-from src.ml_model.features import build_vectorizer
+from src.model_ml.base import BaseMLClassifier
+from src.model_ml.features import build_vectorizer
 
 
 class LogisticRegressionClassifier(BaseMLClassifier):
