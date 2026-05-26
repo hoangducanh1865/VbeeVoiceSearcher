@@ -126,6 +126,40 @@ def _grouped_bar_multi(ax, axis_def: dict, model_results: Dict[str, List[PredRes
     ax.legend(fontsize=7.5, loc="upper right", framealpha=0.85, ncol=2)
 
 
+def _top3_per_model_row(
+    axes_row: list,
+    axis_def: dict,
+    model_results: Dict[str, List[PredResult]],
+    axis_idx: int,
+):
+    """One subplot per model showing top-3 style labels by confidence score."""
+    model_names = list(model_results.keys())
+    for ax, model_name in zip(axes_row, model_names):
+        result = model_results[model_name][axis_idx]
+        top3 = sorted(result.all_scores.items(), key=lambda kv: kv[1], reverse=True)[:3]
+        labels = [item[0] for item in top3]
+        scores = [item[1] for item in top3]
+
+        bar_colors = plt.cm.RdYlGn(np.array(scores))  # type: ignore
+        bars = ax.bar(range(3), scores, color=bar_colors, width=0.55, edgecolor="white", linewidth=0.5)
+
+        ax.set_xticks(range(3))
+        ax.set_xticklabels(labels, fontsize=7.5, rotation=18, ha="right")
+        ax.set_ylim(0, 1.15)
+        ax.set_title(model_name, fontsize=8.5, fontweight="bold", pad=5)
+        ax.axhline(0.50, color="#e74c3c", linestyle="--", linewidth=0.8, alpha=0.6)
+        ax.tick_params(axis="y", labelsize=7)
+        ax.grid(axis="y", alpha=0.2, linewidth=0.5, zorder=0)
+
+        for bar, score in zip(bars, scores):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.025,
+                f"{score:.2f}",
+                ha="center", va="bottom", fontsize=7.5, fontweight="bold",
+            )
+
+
 def plot_comparison(
     all_results: Dict[str, List[PredResult]],
     axes: List[dict],
@@ -140,20 +174,40 @@ def plot_comparison(
     n_single = len(single_axes)
     n_models = len(all_results)
     n_style_labels = len(multi_axes[0]["cac_gia_tri"]) if multi_axes else 0
-    fig_w = max(5 * n_single, 2.2 * n_style_labels + n_models)
-    fig_h = 11
-    fig = plt.figure(figsize=(fig_w, fig_h))
-    gs = fig.add_gridspec(2, n_single, height_ratios=[1, 1.2], hspace=0.6, wspace=0.35)
 
-    # Top row: single-label bar charts
+    fig_w = max(5 * n_single, 2.2 * n_style_labels + n_models)
+    fig_h = 17
+    fig = plt.figure(figsize=(fig_w, fig_h))
+
+    # 3-section vertical layout
+    outer = fig.add_gridspec(3, 1, height_ratios=[1.0, 1.2, 0.85], hspace=0.65)
+
+    # ── Section 1: single-label bar charts ───────────────────────────────────
+    gs_top = outer[0].subgridspec(1, n_single, wspace=0.35)
     for col, (axis_def, axis_idx) in enumerate(zip(single_axes, single_idxs)):
-        ax = fig.add_subplot(gs[0, col])
+        ax = fig.add_subplot(gs_top[0, col])
         _bar_chart_single(ax, axis_def, all_results, axis_idx)
 
-    # Bottom row: multi-label grouped bar chart spanning full width
+    # ── Section 2: multi-label grouped bar chart ─────────────────────────────
     if multi_axes:
-        ax_bottom = fig.add_subplot(gs[1, :])
-        _grouped_bar_multi(ax_bottom, multi_axes[0], all_results, multi_idxs[0])
+        ax_mid = fig.add_subplot(outer[1])
+        _grouped_bar_multi(ax_mid, multi_axes[0], all_results, multi_idxs[0])
+
+    # ── Section 3: top-3 style labels per model ───────────────────────────────
+    if multi_axes:
+        gs_bot = outer[2].subgridspec(1, n_models, wspace=0.45)
+        axes_bot = [fig.add_subplot(gs_bot[0, j]) for j in range(n_models)]
+        # Share y-axis so bars are comparable across models
+        for ax in axes_bot[1:]:
+            ax.sharey(axes_bot[0])
+            ax.tick_params(labelleft=False)
+        axes_bot[0].set_ylabel("Confidence", fontsize=8)
+        _top3_per_model_row(axes_bot, multi_axes[0], all_results, multi_idxs[0])
+        fig.text(
+            0.5, outer[2].get_position(fig).y1 + 0.005,
+            f"Top-3 {multi_axes[0]['metadata_vi']} labels per model",
+            ha="center", fontsize=9, fontweight="bold", color="#333333",
+        )
 
     model_list = " | ".join(
         f"{cfg['short_name']} ({cfg['note']})" for cfg in MODELS
@@ -162,7 +216,7 @@ def plot_comparison(
         f"Model Comparison — Vietnamese TTS Annotation\nInput: {source}",
         fontsize=11, fontweight="bold", y=1.01,
     )
-    fig.text(0.5, -0.01, model_list, ha="center", fontsize=6.5, color="gray")
+    fig.text(0.5, -0.005, model_list, ha="center", fontsize=6.5, color="gray")
 
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     print(f"[INFO] Chart saved → {output_path}", file=sys.stderr)
