@@ -62,7 +62,8 @@ def _bar_chart_single(ax, axis_def: dict, model_results: Dict[str, List[PredResu
         pred_labels.append(label)
 
     x = np.arange(len(model_names))
-    bars = ax.bar(x, confidences, color=colors, width=0.55, edgecolor="white", linewidth=0.8)
+    bar_w = min(0.55, 0.85 / len(model_names))
+    bars = ax.bar(x, confidences, color=colors, width=bar_w, edgecolor="white", linewidth=0.8)
 
     ax.set_xticks(x)
     ax.set_xticklabels(model_names, fontsize=8, rotation=10, ha="right")
@@ -105,7 +106,7 @@ def _heatmap_multi(ax, axis_def: dict, model_results: Dict[str, List[PredResult]
     im = ax.imshow(matrix, aspect="auto", vmin=0, vmax=1, cmap="YlOrRd")
 
     ax.set_xticks(range(len(model_names)))
-    ax.set_xticklabels(model_names, fontsize=9)
+    ax.set_xticklabels(model_names, fontsize=max(6, 9 - len(model_names)))
     ax.set_yticks(range(len(all_labels)))
     ax.set_yticklabels(all_labels, fontsize=8)
     ax.set_title(f"{axis_def['metadata_vi']}  ({axis_def['loai_nhan']})", fontsize=9, fontweight="bold", pad=6)
@@ -144,7 +145,10 @@ def plot_comparison(
     multi_idxs  = [axes.index(ax) for ax in multi_axes]
 
     n_single = len(single_axes)
-    fig = plt.figure(figsize=(5 * n_single, 11))
+    n_models = len(all_results)
+    fig_w = max(5 * n_single, 2.5 * n_models * n_single // 2)
+    fig_h = 10 + max(0, n_models - 4)   # taller heatmap cell labels if many models
+    fig = plt.figure(figsize=(fig_w, fig_h))
     gs = fig.add_gridspec(2, n_single, height_ratios=[1, 1.6], hspace=0.55, wspace=0.35)
 
     # Top row: single-label bar charts

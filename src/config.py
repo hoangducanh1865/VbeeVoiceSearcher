@@ -24,8 +24,13 @@ MODEL_NAME = "joeddav/xlm-roberta-large-xnli"
 MODELS = [
     {
         "id": "joeddav/xlm-roberta-large-xnli",
-        "short_name": "XLM-R-Large",
-        "note": "XLM-RoBERTa-Large fine-tuned on XNLI, ~1.1GB",
+        "short_name": "XLM-R-L",
+        "note": "XLM-RoBERTa-Large + XNLI, multilingual, ~1.1GB",
+    },
+    {
+        "id": "joeddav/xlm-roberta-base-xnli",
+        "short_name": "XLM-R-B",
+        "note": "XLM-RoBERTa-Base + XNLI, multilingual, ~1.1GB",
     },
     {
         "id": "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli",
@@ -35,7 +40,22 @@ MODELS = [
     {
         "id": "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7",
         "short_name": "mDeBERTa-2M7",
-        "note": "mDeBERTa-v3 Base fine-tuned on 2.7M multilingual NLI pairs, ~280MB",
+        "note": "mDeBERTa-v3 Base, 2.7M multilingual NLI pairs, ~280MB",
+    },
+    {
+        "id": "MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli",
+        "short_name": "MiniLM-L6",
+        "note": "Multilingual MiniLM-v2 L6, MNLI+XNLI, ~120MB",
+    },
+    {
+        "id": "MoritzLaurer/multilingual-MiniLMv2-L12-mnli-xnli",
+        "short_name": "MiniLM-L12",
+        "note": "Multilingual MiniLM-v2 L12, MNLI+XNLI, ~230MB",
+    },
+    {
+        "id": "cross-encoder/nli-deberta-v3-large",
+        "short_name": "DeBERTa-v3-L",
+        "note": "DeBERTa-v3-Large NLI, English-focused, ~900MB",
     },
 ]
 
