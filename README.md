@@ -62,4 +62,4 @@ Thêm `HF_TOKEN` vào **Secrets** (biểu tượng 🔑 bên trái), sau đó:
 |---------------|-------------------------------------------------------|--------|
 | XLM-R-Large   | joeddav/xlm-roberta-large-xnli                        | ~1.1GB |
 | mDeBERTa-v3   | MoritzLaurer/mDeBERTa-v3-base-mnli-xnli               | ~280MB |
-| mDeBERTa-2M7  | typeform/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7 | ~280MB |
+| mDeBERTa-2M7  | MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7 | ~280MB |

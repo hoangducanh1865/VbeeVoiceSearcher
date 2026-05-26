@@ -3,13 +3,16 @@ import torch
 from pathlib import Path
 
 # ── HF_TOKEN: auto-load from Google Colab secrets if available ──────────────
+# Must call huggingface_hub.login() — setting os.environ alone is not enough
+# because huggingface_hub registers auth state internally at session level.
 try:
     from google.colab import userdata
+    import huggingface_hub
     _token = userdata.get('HF_TOKEN')
     if _token:
-        os.environ['HF_TOKEN'] = _token
+        huggingface_hub.login(token=_token, add_to_git_credential=False)
 except Exception:
-    pass  # Not in Colab or secret not set — falls back to env var / cached login
+    pass  # Not in Colab or secret not set — falls back to cached ~/.cache/huggingface/token
 
 # ── Model for single-run (main.py) ──────────────────────────────────────────
 # facebook/xlm-roberta-large is the base MLM — no NLI head.
@@ -30,7 +33,7 @@ MODELS = [
         "note": "Multilingual DeBERTa-v3 Base, MNLI+XNLI, ~280MB",
     },
     {
-        "id": "typeform/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7",
+        "id": "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7",
         "short_name": "mDeBERTa-2M7",
         "note": "mDeBERTa-v3 Base fine-tuned on 2.7M multilingual NLI pairs, ~280MB",
     },
