@@ -28,9 +28,9 @@ MODELS = [
         "note": "XLM-RoBERTa-Large + XNLI, multilingual, ~1.1GB",
     },
     {
-        "id": "joeddav/xlm-roberta-base-xnli",
+        "id": "symanto/xlm-roberta-base-snli-mnli-anli-xnli",
         "short_name": "XLM-R-B",
-        "note": "XLM-RoBERTa-Base + XNLI, multilingual, ~1.1GB",
+        "note": "XLM-RoBERTa-Base, SNLI+MNLI+ANLI+XNLI, multilingual, ~500MB",
     },
     {
         "id": "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli",

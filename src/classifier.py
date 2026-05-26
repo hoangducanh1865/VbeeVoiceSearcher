@@ -3,9 +3,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 
-import torch
-from transformers import pipeline
-
+# Import config first so huggingface_hub.login() runs before transformers is loaded
 from src.config import (
     DEVICE,
     HYPOTHESIS_TEMPLATE,
@@ -13,6 +11,9 @@ from src.config import (
     MULTI_LABEL_THRESHOLD,
     MULTI_LABEL_TOP_K,
 )
+
+import torch
+from transformers import pipeline
 
 
 @dataclass
