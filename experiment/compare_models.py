@@ -91,46 +91,39 @@ def _bar_chart_single(ax, axis_def: dict, model_results: Dict[str, List[PredResu
     ax.legend(patches, allowed, fontsize=6, loc="upper right", framealpha=0.7)
 
 
-def _heatmap_multi(ax, axis_def: dict, model_results: Dict[str, List[PredResult]], axis_idx: int):
-    """Heatmap for multi-label Style axis: all labels × models."""
+def _grouped_bar_multi(ax, axis_def: dict, model_results: Dict[str, List[PredResult]], axis_idx: int):
+    """Grouped bar chart for multi-label axis: x=style labels, one bar series per model."""
     model_names = list(model_results.keys())
     all_labels = axis_def["cac_gia_tri"]
+    n_models = len(model_names)
+    n_labels = len(all_labels)
 
-    # Build matrix rows=labels, cols=models
-    matrix = np.zeros((len(all_labels), len(model_names)))
-    for m_idx, model in enumerate(model_names):
-        result = model_results[model][axis_idx]
-        for l_idx, label in enumerate(all_labels):
-            matrix[l_idx, m_idx] = result.all_scores.get(label, 0.0)
+    colors = plt.cm.tab10(np.linspace(0, 0.9, n_models))  # type: ignore
+    bar_w = 0.8 / n_models
+    x = np.arange(n_labels)
 
-    im = ax.imshow(matrix, aspect="auto", vmin=0, vmax=1, cmap="YlOrRd")
+    for m_idx, (model_name, color) in enumerate(zip(model_names, colors)):
+        result = model_results[model_name][axis_idx]
+        scores = [result.all_scores.get(lbl, 0.0) for lbl in all_labels]
+        offset = (m_idx - n_models / 2 + 0.5) * bar_w
+        ax.bar(
+            x + offset, scores,
+            width=bar_w * 0.92, color=color,
+            label=model_name, edgecolor="white", linewidth=0.4, alpha=0.88,
+        )
 
-    ax.set_xticks(range(len(model_names)))
-    ax.set_xticklabels(model_names, fontsize=max(6, 9 - len(model_names)))
-    ax.set_yticks(range(len(all_labels)))
-    ax.set_yticklabels(all_labels, fontsize=8)
-    ax.set_title(f"{axis_def['metadata_vi']}  ({axis_def['loai_nhan']})", fontsize=9, fontweight="bold", pad=6)
-
-    # Annotate cells
-    threshold = 0.50
-    for i in range(len(all_labels)):
-        for j in range(len(model_names)):
-            val = matrix[i, j]
-            marker = "★ " if val >= threshold else ""
-            ax.text(
-                j, i,
-                f"{marker}{val:.2f}",
-                ha="center", va="center",
-                fontsize=7.5,
-                color="black" if val < 0.7 else "white",
-                fontweight="bold" if val >= threshold else "normal",
-            )
-
-    plt.colorbar(im, ax=ax, fraction=0.02, pad=0.02, label="Confidence")
-    ax.text(
-        1.12, -0.04, "★ ≥ 0.50",
-        transform=ax.transAxes, fontsize=7, va="top", color="#c0392b",
+    ax.set_xticks(x)
+    ax.set_xticklabels(all_labels, fontsize=9, rotation=20, ha="right")
+    ax.set_ylim(0, 1.18)
+    ax.set_ylabel("Confidence", fontsize=9)
+    ax.set_title(
+        f"{axis_def['metadata_vi']}  ({axis_def['loai_nhan']})",
+        fontsize=10, fontweight="bold", pad=8,
     )
+    ax.axhline(0.50, color="#e74c3c", linestyle="--", linewidth=1.0, alpha=0.7, label="threshold = 0.50")
+    ax.tick_params(axis="y", labelsize=8)
+    ax.grid(axis="y", alpha=0.25, linewidth=0.5, zorder=0)
+    ax.legend(fontsize=7.5, loc="upper right", framealpha=0.85, ncol=2)
 
 
 def plot_comparison(
@@ -146,20 +139,21 @@ def plot_comparison(
 
     n_single = len(single_axes)
     n_models = len(all_results)
-    fig_w = max(5 * n_single, 2.5 * n_models * n_single // 2)
-    fig_h = 10 + max(0, n_models - 4)   # taller heatmap cell labels if many models
+    n_style_labels = len(multi_axes[0]["cac_gia_tri"]) if multi_axes else 0
+    fig_w = max(5 * n_single, 2.2 * n_style_labels + n_models)
+    fig_h = 11
     fig = plt.figure(figsize=(fig_w, fig_h))
-    gs = fig.add_gridspec(2, n_single, height_ratios=[1, 1.6], hspace=0.55, wspace=0.35)
+    gs = fig.add_gridspec(2, n_single, height_ratios=[1, 1.2], hspace=0.6, wspace=0.35)
 
     # Top row: single-label bar charts
     for col, (axis_def, axis_idx) in enumerate(zip(single_axes, single_idxs)):
         ax = fig.add_subplot(gs[0, col])
         _bar_chart_single(ax, axis_def, all_results, axis_idx)
 
-    # Bottom row: multi-label heatmap spanning full width
+    # Bottom row: multi-label grouped bar chart spanning full width
     if multi_axes:
         ax_bottom = fig.add_subplot(gs[1, :])
-        _heatmap_multi(ax_bottom, multi_axes[0], all_results, multi_idxs[0])
+        _grouped_bar_multi(ax_bottom, multi_axes[0], all_results, multi_idxs[0])
 
     model_list = " | ".join(
         f"{cfg['short_name']} ({cfg['note']})" for cfg in MODELS
