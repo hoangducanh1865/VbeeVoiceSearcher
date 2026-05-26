@@ -1,7 +1,9 @@
+import gc
 import sys
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
+import torch
 from transformers import pipeline
 
 from src.config import (
@@ -17,6 +19,7 @@ from src.config import (
 class PredResult:
     axis: dict
     predictions: List[Tuple[str, float]] = field(default_factory=list)
+    all_scores: Dict[str, float] = field(default_factory=dict)  # full score map for all candidates
     has_warning: bool = False
 
 
@@ -35,6 +38,14 @@ class TextClassifier:
             sys.exit(1)
         print("[INFO] Model loaded.", file=sys.stderr)
 
+    def clear(self) -> None:
+        """Remove model from GPU memory and clear CUDA cache."""
+        del self.pipe
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        print("[INFO] Model cleared from memory.", file=sys.stderr)
+
     def predict(self, text: str, axes: List[dict]) -> List[PredResult]:
         if not text:
             print("[WARNING] Empty text — returning empty predictions.", file=sys.stderr)
@@ -51,17 +62,16 @@ class TextClassifier:
                 hypothesis_template=HYPOTHESIS_TEMPLATE,
                 multi_label=is_multi,
             )
-            # pipeline returns labels sorted by score descending
             scored = list(zip(out["labels"], out["scores"]))
+            all_scores = {label: score for label, score in scored}
 
             if is_multi:
                 picked = [(l, s) for l, s in scored if s >= MULTI_LABEL_THRESHOLD]
-                # Fallback: if nothing clears threshold, take top-k
                 if not picked:
                     picked = scored[:MULTI_LABEL_TOP_K]
             else:
                 picked = [scored[0]]
 
-            results.append(PredResult(axis=axis, predictions=picked))
+            results.append(PredResult(axis=axis, predictions=picked, all_scores=all_scores))
 
         return results
