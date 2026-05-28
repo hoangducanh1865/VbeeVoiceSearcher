@@ -27,7 +27,7 @@ import google.generativeai as genai
 # ── Constants ────────────────────────────────────────────────────────────────
 N_SAMPLES    = 300
 TRAIN_RATIO  = 0.8
-GEMINI_MODEL = "gemini-1.5-flash"
+GEMINI_MODEL = "gemini-2.5-flash"
 RETRY_LIMIT  = 3
 RETRY_DELAY  = 5   # seconds between retries
 
@@ -82,9 +82,9 @@ def _valence_short(v: str) -> str:
     return "Trung tính"
 
 def _energy_short(e: str) -> str:
-    if "low" in e or "Nhẹ" in e:
+    if "Nhẹ nhàng" in e:
         return "Nhẹ nhàng"
-    if "high" in e or "Mạnh" in e:
+    if "Mạnh mẽ" in e:
         return "Mạnh mẽ"
     return "Trung bình"
 
@@ -93,6 +93,7 @@ def build_label_combinations(axes: list[dict], n: int) -> list[dict]:
     """
     Build n label combos systematically covering all axis values,
     using semantic affinity for Style label selection.
+    Increased randomization to avoid repetitive Style assignments.
     """
     intonation_vals = next(a["cac_gia_tri"] for a in axes if a["metadata_en"] == "Intonation")
     valence_vals    = next(a["cac_gia_tri"] for a in axes if a["metadata_en"] == "Valence")
@@ -100,7 +101,7 @@ def build_label_combinations(axes: list[dict], n: int) -> list[dict]:
     temporal_vals   = next(a["cac_gia_tri"] for a in axes if a["metadata_en"] == "Temporal")
     style_vals      = next(a["cac_gia_tri"] for a in axes if a["metadata_en"] == "Style")
 
-    # Build exhaustive base (135 combos = 5×3×3×3)
+    # Build base combos: 5 Intonation × 3 Valence × 3 Energy × 4 Temporal = 180 combos
     base: list[dict] = []
     for inton in intonation_vals:
         for val in valence_vals:
@@ -109,39 +110,42 @@ def build_label_combinations(axes: list[dict], n: int) -> list[dict]:
                     vk = _valence_short(val)
                     ek = _energy_short(eng)
                     key = (vk, ek)
+                    
                     preferred = _STYLE_AFFINITY.get(key, style_vals)
-                    # primary style from affinity, then pad from full list
-                    pool = preferred + [s for s in style_vals if s not in preferred]
-                    styles = pool[:3]
+                    
+                    # INCREASED RANDOMIZATION:
+                    # Sample 2 from preferred styles, then pick 1 from remaining
+                    chosen_styles = random.sample(preferred, min(2, len(preferred)))
+                    remaining = [s for s in style_vals if s not in chosen_styles]
+                    chosen_styles.append(random.choice(remaining))
+                    
                     base.append({
                         "Intonation": inton,
                         "Valence": val,
                         "Energy": eng,
                         "Temporal": temp,
-                        "Style": styles,
+                        "Style": chosen_styles,
                     })
 
     random.shuffle(base)
 
-    # Repeat + randomise Style to reach n
+    # Repeat base to reach n combos, randomizing Style each time
     combos: list[dict] = []
     while len(combos) < n:
         for c in base:
             if len(combos) >= n:
                 break
+            
             vk = _valence_short(c["Valence"])
             ek = _energy_short(c["Energy"])
             key = (vk, ek)
             preferred = _STYLE_AFFINITY.get(key, style_vals)
-            pool = preferred + [s for s in style_vals if s not in preferred]
-            # Introduce variation: occasionally pick different Style combo
-            if len(combos) < len(base):
-                styles = pool[:3]
-            else:
-                extra = [s for s in style_vals if s not in preferred[:2]]
-                styles = preferred[:1] + random.sample(extra, min(2, len(extra)))
-                if len(styles) < 3:
-                    styles = (styles + pool)[:3]
+            
+            # Create different Style variations for diversity
+            styles = random.sample(preferred, min(2, len(preferred)))
+            extra = [s for s in style_vals if s not in styles]
+            styles.append(random.choice(extra))
+            
             combos.append({**c, "Style": styles})
 
     random.shuffle(combos)
@@ -151,18 +155,50 @@ def build_label_combinations(axes: list[dict], n: int) -> list[dict]:
 # ── Gemini story generation ───────────────────────────────────────────────────
 
 def _build_prompt(combo: dict) -> str:
+    """Build a prompt optimized for TTS data generation."""
     styles = ", ".join(combo["Style"])
     return (
-        "Viết một đoạn văn bản tiếng Việt khoảng 3-5 câu, "
-        "phù hợp để đọc với thông số TTS sau:\n"
-        f"- Ngữ điệu: {combo['Intonation']}\n"
-        f"- Cảm xúc: {combo['Valence']}\n"
-        f"- Năng lượng: {combo['Energy']}\n"
-        f"- Tốc độ đọc: {combo['Temporal']}\n"
-        f"- Phong cách: {styles}\n\n"
-        "Đoạn văn có thể là trích truyện, kịch bản, tin tức, phát biểu, thơ, v.v. "
-        "Chỉ trả về nội dung đoạn văn, không giải thích."
+        "Bạn là một chuyên gia biên kịch và ngôn ngữ học tiếng Việt.\n"
+        "Hãy viết một đoạn văn bản tiếng Việt ngắn từ 3 đến 5 câu (tuyệt đối KHÔNG viết thơ, KHÔNG viết kịch bản có tên nhân vật phía trước).\n\n"
+        "Văn bản này phải được viết bằng từ ngữ, cấu trúc câu và ngữ cảnh sao cho người nghe có thể cảm nhận rõ ràng các yếu tố sau khi đọc lên:\n"
+        f"- Cảm xúc chủ đạo: {combo['Valence']}\n"
+        f"- Năng lượng/Sắc thái: {combo['Energy']}\n"
+        f"- Phong cách diễn đạt: {styles}\n"
+        f"- Gợi ý nhịp điệu khi đọc: {combo['Temporal']} và có tông giọng {combo['Intonation']}\n\n"
+        "QUY ĐỊNH NGHIÊM NGẶT VỀ ĐỊNH DẠNG:\n"
+        "1. CHỈ trả về duy nhất nội dung đoạn văn bằng tiếng Việt chuẩn. Không có lời mở đầu, không giải thích, không ghi chú.\n"
+        "2. KHÔNG sử dụng các ký tự đặc biệt như: *, #, _, ~, [], (), <>, -, tránh lạm dụng dấu ba chấm (...).\n"
+        "3. Các câu phải có độ dài vừa phải, rõ ràng cấu trúc Chủ ngữ - Vị ngữ để người đọc dễ ngắt nghỉ tự nhiên."
     )
+
+
+def _is_valid_text(text: str) -> bool:
+    """Validate generated text for TTS suitability."""
+    if not text or len(text) < 20:
+        return False
+    
+    # Avoid special characters that break TTS
+    forbidden_chars = ['*', '#', '_', '~', '[', ']', '<', '>', '«', '»']
+    for char in forbidden_chars:
+        if char in text:
+            return False
+    
+    # Avoid excessive ellipsis or dashes
+    if text.count('...') > 2 or text.count('---') > 0:
+        return False
+    
+    # Avoid poetry-like structures (lines ending with common rhyme markers)
+    lines = text.strip().split('\n')
+    if len(lines) > 2 and all(len(line) < 15 for line in lines if line):
+        # Likely verse/poetry format
+        return False
+    
+    # Check for minimal sentence structure (Chủ ngữ - Vị ngữ)
+    sentence_count = len([s for s in text.split('.') if s.strip()])
+    if sentence_count < 2:
+        return False
+    
+    return True
 
 
 def generate_story(model: genai.GenerativeModel, combo: dict) -> str | None:
@@ -171,13 +207,30 @@ def generate_story(model: genai.GenerativeModel, combo: dict) -> str | None:
         try:
             resp = model.generate_content(prompt)
             text = resp.text.strip()
-            if text:
+            if text and _is_valid_text(text):
                 return text
+            elif text:
+                print(f"  [WARN] Text failed validation (attempt {attempt}/{RETRY_LIMIT})", file=sys.stderr)
         except Exception as e:
             print(f"  [WARN] Attempt {attempt}/{RETRY_LIMIT} failed: {e}", file=sys.stderr)
             if attempt < RETRY_LIMIT:
                 time.sleep(RETRY_DELAY * attempt)
     return None
+
+
+def _save_train_test_split(records: dict[str, dict], out_dir: Path) -> None:
+    """Shuffle all records and save to train/test files."""
+    records_list = list(records.values())
+    random.shuffle(records_list)
+    split = int(len(records_list) * TRAIN_RATIO)
+    train_records = records_list[:split]
+    test_records  = records_list[split:]
+
+    for path, data in [(out_dir / "train.jsonl", train_records),
+                       (out_dir / "test.jsonl",  test_records)]:
+        with open(path, "w", encoding="utf-8") as f:
+            for rec in data:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 
 # ── Main generation loop ─────────────────────────────────────────────────────
@@ -188,43 +241,62 @@ def generate_dataset(n: int, out_dir: Path) -> None:
     model = _init_gemini()
 
     combos = build_label_combinations(axes, n)
-    print(f"[INFO] Generating {n} stories with Gemini ({GEMINI_MODEL}) ...", file=sys.stderr)
-
-    records: list[dict] = []
     raw_path = out_dir / "raw.jsonl"
-    raw_path.unlink(missing_ok=True)
 
+    # ── Load existing records (resume support) ──
+    existing_records: dict[str, dict] = {}  # {id: record}
+    if raw_path.exists():
+        print(f"[INFO] Loading existing records from {raw_path} ...", file=sys.stderr)
+        with open(raw_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    rec = json.loads(line)
+                    existing_records[rec["id"]] = rec
+        print(f"[INFO] Found {len(existing_records)} existing records", file=sys.stderr)
+    
+    print(f"[INFO] Generating {n} stories with Gemini ({GEMINI_MODEL}) ...", file=sys.stderr)
+    print(f"[INFO] Target: {n} / Already have: {len(existing_records)}", file=sys.stderr)
+
+    # ── Generate missing stories ──
+    start_idx = len(existing_records)
     for i, combo in enumerate(combos, 1):
+        story_id = f"gen_{i:03d}"
+        
+        # Skip if already generated
+        if story_id in existing_records:
+            if i <= start_idx:
+                continue
+        
         text = generate_story(model, combo)
         if text is None:
-            print(f"  [SKIP] story_{i:03d} — Gemini returned nothing", file=sys.stderr)
+            print(f"  [SKIP] {story_id} — Gemini returned nothing", file=sys.stderr)
             continue
 
-        record = {"id": f"gen_{i:03d}", "text": text, **combo}
-        records.append(record)
+        record = {"id": story_id, "text": text, **combo}
+        existing_records[story_id] = record
+        
+        # Append to raw.jsonl
         with open(raw_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
-
-        if i % 10 == 0 or i == n:
-            print(f"[INFO] Generated {i}/{n} ...", file=sys.stderr)
+        
+        # Update train/test files every 10 records
+        if len(existing_records) % 10 == 0 or i == n:
+            _save_train_test_split(existing_records, out_dir)
+            split = int(len(existing_records) * TRAIN_RATIO)
+            print(f"[INFO] Generated {len(existing_records)}/{n} → {split} train / {len(existing_records) - split} test", file=sys.stderr)
 
         # Polite rate-limit: ~0.3 s between calls (free tier = 15 RPM = 1/4s)
         time.sleep(0.35)
 
-    # Shuffle and split
-    random.shuffle(records)
-    split = int(len(records) * TRAIN_RATIO)
-    train_records = records[:split]
-    test_records  = records[split:]
-
-    for path, data in [(out_dir / "train.jsonl", train_records),
-                       (out_dir / "test.jsonl",  test_records)]:
-        with open(path, "w", encoding="utf-8") as f:
-            for rec in data:
-                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-
+    # Final split (in case not multiple of 10)
+    if len(existing_records) % 10 != 0:
+        _save_train_test_split(existing_records, out_dir)
+    
+    records_list = list(existing_records.values())
+    split = int(len(records_list) * TRAIN_RATIO)
     print(
-        f"[INFO] Done. {len(train_records)} train / {len(test_records)} test "
+        f"[INFO] Done. {split} train / {len(records_list) - split} test "
         f"→ {out_dir}/",
         file=sys.stderr,
     )
